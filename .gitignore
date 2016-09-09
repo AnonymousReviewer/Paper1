@@ -1,0 +1,9 @@
+.Rhistory
+.DS_Store
+
+# large file
+buildings_lux.osm
+
+# ssh spec config
+.ssh
+
