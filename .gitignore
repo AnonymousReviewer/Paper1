@@ -1,8 +1,10 @@
 .Rhistory
 .DS_Store
 
-# large file
+# large files
 buildings_lux.osm
+buildings_besac.osm
+data
 
 # ssh spec config
 .ssh

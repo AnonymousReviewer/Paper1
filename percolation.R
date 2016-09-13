@@ -8,10 +8,15 @@ library(ggplot2)
 
 # load data, convert to spatial polygons
 start=proc.time()[3]
-buildings = as_sp(get_osm(corner_bbox(0.0, 45.0,20.0, 50.0),source=osmsource_file('buildings_lux.osm')))$polygons
+buildings = as_sp(get_osm(corner_bbox(0.0, 45.0,20.0, 50.0),source=osmsource_file('buildings_moissey.osm')))$polygons
+# can alternatively directly load from osm api -- works only with small bbox
+# TODO add tag filter
+#buildings = as_sp(get_osm(corner_bbox(5.4254,47.0653,5.5387,47.134),source=osmsource_api()))$polygons
+
 gc(verbose=TRUE)
 show(start-proc.time()[3])
 # for luxembourg -> 13703s cpu time
+# for besac -> 
 
 ##
 # Function to construct topological network from spatial polygons
@@ -29,8 +34,10 @@ constructNetwork <- function(polygons){
   
   # construction of the graph
   # let do it dirtily taking coordinates as vertices id
-  from=c();to=c();elengths=c();vids=c();vxcors=c();vycors=c()
+  #from=c();to=c();elengths=c();vids=c();vxcors=c();vycors=c()
   n=length(delaunay@polygons)
+  nedges = sum(sapply(delaunay@polygons,function(p){nrow(p@Polygons[[1]]@coords)-1}))
+  edf = matrix(0,nedges,3);vdf=matrix(0,nedges,3);k=1
   for(p in 1:n){
     if(p%%100==0){show(100*p/n)}
     polygon = delaunay@polygons[[p]]@Polygons[[1]]
@@ -43,12 +50,18 @@ constructNetwork <- function(polygons){
       #elength = sqrt((coords[i-1,1]-coords[i,1])^2+(coords[i-1,2]-coords[i,2])^2)
       # better use spDists to have in kms
       elength=spDistsN1(matrix(polygon@coords[i,],ncol=2),polygon@coords[i-1,],longlat = TRUE)
-      elengths=append(elengths,elength)
-      from=append(from,v1);to=append(to,v2)
-      vids=append(vids,v2);vxcors=append(vxcors,coords[i,1]);vycors=append(vycors,coords[i,2])
+      #elengths=append(elengths,elength)
+      #from=append(from,v1);to=append(to,v2)
+      #vids=append(vids,v2);vxcors=append(vxcors,coords[i,1]);vycors=append(vycors,coords[i,2])
+      edf[k,1]=v1;edf[k,2]=v2;edf[k,3]=elength
+      vdf[k,1]=v2;vdf[k,2]=coords[i,1];vdf[k,3]=coords[i,2]
+      k=k+1
     }
   }
-  edf=data.frame(from=from,to=to,length=elengths);vdf=unique(data.frame(id=vids,x=vxcors,y=vycors))
+  #edf=data.frame(from=from,to=to,length=elengths);
+  #vdf=unique(data.frame(id=vids,x=vxcors,y=vycors))
+  edf=data.frame(edf);colnames(edf)=c("from","to","length")
+  edf$length=as.numeric(as.character(edf$length))
   
   g = graph_from_data_frame(d = edf,directed = FALSE)
   #V(g)[vdf[,1]]$x=vdf[,2];V(g)[vdf[,1]]$y=vdf[,3]
@@ -85,6 +98,7 @@ linkQuantity<-function(gg){
   comps=components(gg)
   res=c()
   for(c in 1:length(comps$csize)){
+    if(c%%100==0){show(100*c/length(comps$csize))}
     v = V(gg)[comps$membership==c]
     e = E(gg)[v%--%v]
     res=append(res,log(sum(e$t)))
@@ -104,28 +118,28 @@ linkQuantity<-function(gg){
 g=constructNetwork(buildings)
 
 # test
-gg=gravityGraph(g,beta=1.5,q=0.5)
+#gg=gravityGraph(g,beta=1.5,q=0.5)
 
 
 
 
 # plot numcomp = f(quantile) at fixed betas
-res=data.frame()
-for(q in (1:100)/100){
-show(q)
-gg=gravityGraph(g,beta=1.5,quant=q)
-res=rbind(res,c(q,length(components(gg)$csize)))
-}
-colnames(res)=c("q","comps")
-
-gp=ggplot(res,aes(x=q,y=comps))
-gp+geom_line()
-
+# res=data.frame()
+# for(q in (1:100)/100){
+# show(q)
+# gg=gravityGraph(g,beta=1.5,quant=q)
+# res=rbind(res,c(q,length(components(gg)$csize)))
+# }
+# colnames(res)=c("q","comps")
+# 
+# gp=ggplot(res,aes(x=q,y=comps))
+# gp+geom_line()
+# 
 
 
 # plot rank-size of link quantity for varying beta (paper plots)
 
-q = 0.5
+q = 0.1;beta=2
 res=data.frame()
 for(beta in seq(from=0.5,to=4.0,by=0.1)){
   for(q in c(0.2,0.4,0.6,0.8)){
@@ -139,10 +153,11 @@ for(beta in seq(from=0.5,to=4.0,by=0.1)){
 colnames(res)=c("beta","q","lq","g")
 
 gp=ggplot(res,aes(x=g,y=lq,colour=beta,group=beta))
-gp+geom_line()+facet_wrap(~q)
+gp+geom_line()+facet_wrap(~q,scales = "free")
 
+ggsave(filename = 'res/')
 
-
+#plot(1:length(lq),sort(lq,decreasing=TRUE),type='l',xlab="g",ylab="Qg",main="Moissey;beta=1.5;q=0.5")
 
 
 
